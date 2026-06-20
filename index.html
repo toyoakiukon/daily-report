@@ -29,6 +29,11 @@
   .datebox input[type=date]{font-size:16px;border:1px solid var(--line-strong);border-radius:7px;padding:6px 8px;font-family:inherit;color:var(--ink);background:#fff;}
   .ymd{font-size:17px;font-weight:700;letter-spacing:.06em;white-space:nowrap;}
   .ymd .wd{color:var(--accent);}
+  .sync{font-size:12px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);cursor:pointer;white-space:nowrap;align-self:center;font-weight:600;}
+  .sync-saved{color:#1f8a4c;border-color:#bfe0cb;background:#f0faf4;}
+  .sync-saving,.sync-loading{color:var(--accent);border-color:#b8c6da;background:#eef4fb;}
+  .sync-error{color:var(--ng);border-color:#e0b4ae;background:#fbeeec;}
+  .sync-local{color:var(--muted);background:#f3f5f8;}
 
   .tabs{display:flex;gap:6px;margin-bottom:14px;}
   .tab{flex:1;text-align:center;padding:12px;border:1px solid var(--line-strong);background:#fff;border-radius:9px;cursor:pointer;font-size:15px;font-weight:700;color:var(--muted);font-family:inherit;}
@@ -157,6 +162,53 @@ function emptyForm(){
     useMobile:"", useLine:"", mobile:emptyMobile(), bb:"", denki:"", gas:"" };
 }
 function storeKey(d){ return "uriage_nippo_v2_" + d; }
+const LS_STORE_KEY = "uriage_nippo_store_v1";
+
+/* ============================================================
+   ★ 他端末と共有する設定（JSONBin.io）★
+   ① https://jsonbin.io/ で無料登録 → 「CREATE BIN」で中身 {} の
+      ビンを1つ作る → その Bin ID をコピー
+   ② API KEYS から Master Key（または対象ビンに read/update 権限を
+      付けた Access Key）をコピー
+   ③ 下の2行に貼り付けて、CLOUD_ENABLED を true にして再デプロイ
+   これで、このURLを開いた全端末が同じデータを見られます。
+   ※ キーはページのソースから見えます。店舗内専用ツール用途として、
+     可能なら Master Key ではなく権限を絞った Access Key を推奨。
+     Access Key を使う場合は CLOUD_KEY_HEADER を "X-Access-Key" に。
+   ============================================================ */
+const CLOUD_ENABLED = true;
+const JSONBIN_BIN_ID = "6a3695feda38895dfee2d382";
+const JSONBIN_KEY    = "$2a$10$kb4606NT2s7sIqqcPuGTGefZ2uIaVqlXUD.T25aB0gi4KRdO5Ir22";
+const CLOUD_KEY_HEADER = "X-Master-Key";
+const JSONBIN_BASE = "https://api.jsonbin.io/v3/b";
+
+function cloudReady(){
+  return CLOUD_ENABLED && JSONBIN_BIN_ID.indexOf("貼る") < 0 && JSONBIN_KEY.indexOf("貼る") < 0;
+}
+function normalizeStore(obj){
+  const out = {};
+  if(obj && typeof obj === "object"){
+    Object.keys(obj).forEach(function(d){
+      const arr = obj[d];
+      if(Array.isArray(arr)){ out[d] = arr.map(normalizeRec).filter(recHasAny); }
+    });
+  }
+  return out;
+}
+function migrateOldKeys(){
+  const out = {};
+  try{
+    for(let i=0;i<window.localStorage.length;i++){
+      const k = window.localStorage.key(i);
+      if(k && k.indexOf("uriage_nippo_v2_") === 0){
+        const d = k.substring("uriage_nippo_v2_".length);
+        const p = JSON.parse(window.localStorage.getItem(k));
+        if(Array.isArray(p)){ out[d] = p; }
+      }
+    }
+  }catch(e){}
+  return out;
+}
 
 function normalizeRec(o){
   o = o || {};
@@ -184,27 +236,68 @@ function summarize(r){
 function App(){
   const [dateStr, setDateStr] = useState(todayStr());
   const [tab, setTab] = useState("entry");
-  const [records, setRecords] = useState([]);
+  const [store, setStore] = useState({});
   const [form, setForm] = useState(emptyForm());
-  const skipSave = useRef(false);
+  const [sync, setSync] = useState(cloudReady() ? "loading" : "local");
 
+  const dateRef = useRef(dateStr);
+  useEffect(function(){ dateRef.current = dateStr; }, [dateStr]);
+  const loadedRef = useRef(false);
+  const saveTimer = useRef(null);
+
+  const records = store[dateStr] || [];
+
+  const setRecords = useCallback(function(updater){
+    setStore(function(ps){
+      const d = dateRef.current;
+      const cur = ps[d] || [];
+      const next = (typeof updater === "function") ? updater(cur) : updater;
+      const ns = Object.assign({}, ps); ns[d] = next; return ns;
+    });
+  }, []);
+
+  const pullCloud = useCallback(function(){
+    if(!cloudReady()){ return; }
+    setSync("loading");
+    const headers = {}; headers[CLOUD_KEY_HEADER] = JSONBIN_KEY;
+    fetch(JSONBIN_BASE + "/" + JSONBIN_BIN_ID + "/latest", { headers: headers })
+      .then(function(r){ if(!r.ok){ throw new Error("http " + r.status); } return r.json(); })
+      .then(function(j){
+        const rec = (j && j.record) ? j.record : {};
+        loadedRef.current = true;
+        setStore(normalizeStore(rec));
+        setSync("saved");
+      })
+      .catch(function(e){ loadedRef.current = true; setSync("error"); });
+  }, []);
+
+  // 初回ロード：ローカル即時 → クラウド取得
   useEffect(function(){
-    skipSave.current = true;
-    let recs = [];
+    let local = null;
     try{
-      const raw = window.localStorage.getItem(storeKey(dateStr));
-      if(raw){
-        const p = JSON.parse(raw);
-        if(Array.isArray(p)){ recs = p.map(normalizeRec).filter(recHasAny); }
-      }
+      const raw = window.localStorage.getItem(LS_STORE_KEY);
+      if(raw){ local = JSON.parse(raw); }
     }catch(e){}
-    setRecords(recs);
-  }, [dateStr]);
+    if(!local || Object.keys(local).length === 0){ local = migrateOldKeys(); }
+    if(local && Object.keys(local).length > 0){ setStore(normalizeStore(local)); }
+    if(cloudReady()){ pullCloud(); }
+    else { loadedRef.current = true; }
+  }, [pullCloud]);
 
+  // 保存：ローカルは即時、クラウドはデバウンスPUT
   useEffect(function(){
-    if(skipSave.current){ skipSave.current = false; return; }
-    try{ window.localStorage.setItem(storeKey(dateStr), JSON.stringify(records)); }catch(e){}
-  }, [records, dateStr]);
+    try{ window.localStorage.setItem(LS_STORE_KEY, JSON.stringify(store)); }catch(e){}
+    if(!cloudReady()){ return; }
+    if(!loadedRef.current){ return; }
+    setSync("saving");
+    if(saveTimer.current){ clearTimeout(saveTimer.current); }
+    saveTimer.current = setTimeout(function(){
+      const headers = { "Content-Type":"application/json" }; headers[CLOUD_KEY_HEADER] = JSONBIN_KEY;
+      fetch(JSONBIN_BASE + "/" + JSONBIN_BIN_ID, { method:"PUT", headers: headers, body: JSON.stringify(store) })
+        .then(function(r){ if(!r.ok){ throw new Error("http " + r.status); } setSync("saved"); })
+        .catch(function(e){ setSync("error"); });
+    }, 800);
+  }, [store]);
 
   const ymd = useMemo(function(){
     const p = dateStr.split("-");
@@ -322,6 +415,13 @@ function App(){
           <input id="d" type="date" value={dateStr} onChange={function(e){ setDateStr(e.target.value); }} />
           <span className="ymd">{ymd.y}/{ymd.m}/{ymd.d}（<span className="wd">{ymd.wd}</span>）</span>
         </div>
+        <span className={"sync sync-"+sync} onClick={pullCloud} title="タップで再読み込み">{
+          sync==="loading" ? "読込中…" :
+          sync==="saving" ? "保存中…" :
+          sync==="saved" ? "● 同期済み" :
+          sync==="error" ? "△ 同期エラー（タップで再試行）" :
+          "ローカル保存のみ"
+        }</span>
       </div>
 
       <div className="tabs">
@@ -432,6 +532,7 @@ function App(){
       ) : (
         <div className="sheet-view">
           <div className="toolbar">
+            <button className="btn" onClick={pullCloud}>再読込</button>
             <button className="btn primary" onClick={function(){ window.print(); }}>印刷</button>
             <button className="btn" onClick={exportCsv}>CSV出力</button>
             <button className="btn danger" onClick={clearDay}>この日を消去</button>
