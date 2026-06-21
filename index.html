@@ -55,6 +55,10 @@
   .f-field label{font-size:11px;color:var(--muted);}
   .f-field input,.f-field select{font-family:inherit;font-size:16px;border:1px solid var(--line-strong);border-radius:7px;padding:8px;color:var(--ink);background:#fff;width:100%;}
   .f-field select{-webkit-appearance:none;appearance:none;}
+  .catch-field{grid-column:span 2;}
+  .catch-row{display:flex;gap:6px;}
+  .catch-row .catch-sel{flex:0 0 44%;width:auto;min-width:96px;}
+  .catch-row .catch-name{flex:1 1 auto;min-width:0;}
   .time-row{display:flex;gap:6px;}
   .time-row input{flex:1;}
   .time-now{white-space:nowrap;font-family:inherit;font-size:13px;border:1px solid var(--line-strong);border-radius:7px;background:#f0f3f8;cursor:pointer;padding:0 12px;color:var(--ink);}
@@ -143,7 +147,7 @@ const KATCH_OPTS = ["", "社員", "Panasonic", "SONY", "REGZA", "SHARP", "Hisens
 const DONE_OPTS = ["", "済"];
 const OX_OPTS = ["", "◯", "✕"];
 const USE_MOBILE_OPTS = ["", "docomo", "ahamo", "au", "UQ", "SB", "YM", "楽天", "格安"];
-const USE_LINE_OPTS = ["", "ドコモ光", "home5G", "au光", "UQ WiMAX", "BIGLOBE光", "SB光", "Air", "CATV", "菅込", "未利用"];
+const USE_LINE_OPTS = ["", "ドコモ光", "home5G", "au光", "UQ WiMAX", "BIGLOBE光", "SB光", "NURO光", "Air", "CATV", "菅込", "その他", "未利用"];
 const MOBILE_ITEMS = [
   { key:"sbT", label:"SB 端末MNP" },
   { key:"sbS", label:"SB SIM MNP" },
@@ -440,13 +444,12 @@ function App(){
                 <button type="button" className="time-now" onClick={function(){ setF("time", nowHM()); }}>現在</button>
               </div>
             </div>
-            <div className="f-field">
-              <label>キャッチ（区分）</label>
-              <select value={form.katch} onChange={function(e){ setF("katch", e.target.value); }}>{selOpts(KATCH_OPTS)}</select>
-            </div>
-            <div className="f-field">
-              <label>キャッチ（名前）</label>
-              <input value={form.katchName} onChange={function(e){ setF("katchName", e.target.value); }} />
+            <div className="f-field catch-field">
+              <label>キャッチ</label>
+              <div className="catch-row">
+                <select className="catch-sel" value={form.katch} onChange={function(e){ setF("katch", e.target.value); }}>{selOpts(KATCH_OPTS)}</select>
+                <input className="catch-name" placeholder="名前" value={form.katchName} onChange={function(e){ setF("katchName", e.target.value); }} />
+              </div>
             </div>
             <div className="f-field">
               <label>クローズ</label>
