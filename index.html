@@ -135,14 +135,14 @@
     thead th{background:#444 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
     @page{size:A4 portrait;margin:10mm;}
   }
-  /* 「印刷（1枚PDF）」用：画面の表を比率そのままA4縦1枚に縮小 */
-  .compact-print .wrap{padding:0;zoom:var(--print-scale,1);}
+  /* 「印刷（1枚PDF）」用：実寸を縮小してA4縦1枚に収める（transform方式） */
+  .compact-print .wrap{padding:0 !important;max-width:none !important;}
   .compact-print .titlebar{margin-bottom:8px;}
   .compact-print .datebox{border:none;padding:0;background:transparent;}
   .compact-print .datebox label{display:none;}
   .compact-print .tabs,.compact-print .toolbar,.compact-print .hint,.compact-print .sync,.compact-print .x-btn,.compact-print .c-op{display:none !important;}
   .compact-print .sheet{box-shadow:none;}
-  .compact-print .sheet .scroll{overflow:visible;}
+  .compact-print .sheet .scroll{overflow:visible !important;}
   @media (max-width:560px){
     .titlebar h1{font-size:17px;} .ymd{font-size:15px;}
   }
@@ -373,26 +373,36 @@ function App(){
   const printOnePage = useCallback(function(){
     const run = function(){
       const root = document.querySelector(".wrap");
-      if(!root){ window.print(); return; }
+      const rootEl = document.getElementById("root");
+      if(!root || !rootEl){ window.print(); return; }
       document.body.classList.add("compact-print");
-      document.documentElement.style.setProperty("--print-scale", "1");
-      const w = root.scrollWidth || 700;
+      root.style.transform = "none"; root.style.width = "";
+      rootEl.style.width = ""; rootEl.style.height = ""; rootEl.style.overflow = "";
+      const tableEl = root.querySelector(".sheet table");
+      const tableW = tableEl ? tableEl.scrollWidth : 0;
+      const w = Math.max(root.scrollWidth || 0, tableW, 700);
       const h = root.scrollHeight || 1;
-      const PAGE_W = 700, PAGE_H = 1040;
+      const PAGE_W = 700, PAGE_H = 1020;
       let s = Math.min(PAGE_W / w, PAGE_H / h, 1);
       s = Math.floor(s * 1000) / 1000;
       if(!(s > 0)){ s = 1; }
-      document.documentElement.style.setProperty("--print-scale", String(s));
+      root.style.width = w + "px";
+      root.style.transformOrigin = "top left";
+      root.style.transform = "scale(" + s + ")";
+      rootEl.style.width = Math.ceil(w * s) + "px";
+      rootEl.style.height = Math.ceil(h * s) + "px";
+      rootEl.style.overflow = "hidden";
       const cleanup = function(){
         document.body.classList.remove("compact-print");
-        document.documentElement.style.removeProperty("--print-scale");
+        root.style.transform = ""; root.style.width = ""; root.style.transformOrigin = "";
+        rootEl.style.width = ""; rootEl.style.height = ""; rootEl.style.overflow = "";
         window.removeEventListener("afterprint", cleanup);
       };
       window.addEventListener("afterprint", cleanup);
       window.print();
     };
-    if(tab !== "sheet"){ setTab("sheet"); setTimeout(run, 80); }
-    else { run(); }
+    if(tab !== "sheet"){ setTab("sheet"); setTimeout(run, 120); }
+    else { setTimeout(run, 0); }
   }, [tab]);
 
   const register = useCallback(function(){
