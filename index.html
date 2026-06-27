@@ -155,6 +155,7 @@ const MOBILE_ITEMS = [
   { key:"ymS", label:"YM SIM MNP" }
 ];
 const BB_OPTS = ["", "1G光新規", "1G光事変", "10G光新規", "Air新規", "Air機変"];
+const CARD_OPTS = ["", "ノーマル", "GOLD"];
 
 function pad(n){ return n < 10 ? "0" + n : "" + n; }
 function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
@@ -163,7 +164,7 @@ function newId(){ return "" + Date.now() + "_" + Math.floor(Math.random()*100000
 function emptyMobile(){ return { sbT:0, sbS:0, ymT:0, ymS:0 }; }
 function emptyForm(){
   return { time:"", katch:"", katchName:"", close:"", deal:"", bw:"", emp:"",
-    useMobile:"", useLine:"", mobile:emptyMobile(), bb:"", denki:"", gas:"" };
+    useMobile:"", useLine:"", mobile:emptyMobile(), bb:"", denki:"", gas:"", card:"" };
 }
 function storeKey(d){ return "uriage_nippo_v2_" + d; }
 const LS_STORE_KEY = "uriage_nippo_store_v1";
@@ -219,11 +220,11 @@ function normalizeRec(o){
   const m = Object.assign(emptyMobile(), o.mobile || {});
   return { id:o.id || newId(), time:o.time||"", katch:o.katch||"", katchName:o.katchName||"",
     close:o.close||"", deal:o.deal||"", bw:o.bw||"", emp:o.emp||"",
-    useMobile:o.useMobile||"", useLine:o.useLine||"", mobile:m, bb:o.bb||"", denki:o.denki||"", gas:o.gas||"" };
+    useMobile:o.useMobile||"", useLine:o.useLine||"", mobile:m, bb:o.bb||"", denki:o.denki||"", gas:o.gas||"", card:o.card||"" };
 }
 function mobTotalOf(r){ let t=0; for(let i=0;i<MOBILE_ITEMS.length;i++){ t += Number(r.mobile[MOBILE_ITEMS[i].key])||0; } return t; }
 function recHasAny(r){
-  return !!(r.time||r.katch||r.katchName||r.close||r.deal||r.bw||r.emp||r.useMobile||r.useLine||mobTotalOf(r)||r.bb||r.denki||r.gas);
+  return !!(r.time||r.katch||r.katchName||r.close||r.deal||r.bw||r.emp||r.useMobile||r.useLine||mobTotalOf(r)||r.bb||r.denki||r.gas||r.card);
 }
 function summarize(r){
   const parts=[];
@@ -234,6 +235,7 @@ function summarize(r){
   if(r.bb){ parts.push(r.bb); }
   if(r.denki){ parts.push("でんき"+r.denki); }
   if(r.gas){ parts.push("ガス"+r.gas); }
+  if(r.card){ parts.push("PayPayカード "+r.card); }
   return parts.join("、");
 }
 
@@ -332,11 +334,11 @@ function App(){
     const f = form;
     const mob = emptyMobile(); let mt=0;
     for(let i=0;i<MOBILE_ITEMS.length;i++){ const k=MOBILE_ITEMS[i].key; const n=Number(f.mobile[k])||0; mob[k]=n; mt+=n; }
-    const has = f.katch||f.katchName||f.close||f.deal||f.bw||f.emp||f.useMobile||f.useLine||mt||f.bb||f.denki||f.gas;
+    const has = f.katch||f.katchName||f.close||f.deal||f.bw||f.emp||f.useMobile||f.useLine||mt||f.bb||f.denki||f.gas||f.card;
     if(!has){ window.alert("内容を入力してください。"); return; }
     const rec = { id:newId(), time:f.time?f.time:nowHM(), katch:f.katch, katchName:f.katchName,
       close:f.close, deal:f.deal, bw:f.bw, emp:f.emp, useMobile:f.useMobile, useLine:f.useLine,
-      mobile:mob, bb:f.bb, denki:f.denki, gas:f.gas };
+      mobile:mob, bb:f.bb, denki:f.denki, gas:f.gas, card:f.card };
     setRecords(function(prev){ return prev.concat([rec]); });
     resetForm();
   }, [form, resetForm]);
@@ -361,32 +363,34 @@ function App(){
   const totals = useMemo(function(){
     const mob = emptyMobile(); let mobTotal=0;
     const bb = {}; for(let i=1;i<BB_OPTS.length;i++){ bb[BB_OPTS[i]]=0; }
-    let denkiO=0, gasO=0, dealO=0, dealX=0, bwDone=0, empDone=0;
+    let denkiO=0, gasO=0, dealO=0, dealX=0, bwDone=0, empDone=0, cardN=0, cardG=0;
     records.forEach(function(r){
       for(let i=0;i<MOBILE_ITEMS.length;i++){ const k=MOBILE_ITEMS[i].key; const n=Number(r.mobile[k])||0; mob[k]+=n; mobTotal+=n; }
       if(r.bb && bb.hasOwnProperty(r.bb)){ bb[r.bb]+=1; }
       if(r.denki==="◯") denkiO++;
       if(r.gas==="◯") gasO++;
+      if(r.card==="ノーマル") cardN++;
+      if(r.card==="GOLD") cardG++;
       if(r.deal==="◯") dealO++;
       if(r.deal==="✕") dealX++;
       if(r.bw==="済") bwDone++;
       if(r.emp==="済") empDone++;
     });
-    return { mob:mob, mobTotal:mobTotal, bb:bb, denkiO:denkiO, gasO:gasO,
+    return { mob:mob, mobTotal:mobTotal, bb:bb, denkiO:denkiO, gasO:gasO, cardN:cardN, cardG:cardG,
       dealO:dealO, dealX:dealX, bwDone:bwDone, empDone:empDone, count:records.length,
       rate: records.length>0 ? Math.round((dealO/records.length)*1000)/10 : null };
   }, [records]);
 
   const exportCsv = useCallback(function(){
     const head = ["No","時間","キャッチ区分","キャッチ名前","クローズ","成約","白黒","社員紹介",
-      "現在利用中(携帯)","現在利用中(回線)","SB端末MNP","SB SIM MNP","YM端末MNP","YM SIM MNP","BB","でんき","ガス"];
+      "現在利用中(携帯)","現在利用中(回線)","SB端末MNP","SB SIM MNP","YM端末MNP","YM SIM MNP","BB","でんき","ガス","PayPayカード"];
     const lines = [head.join(",")];
     records.forEach(function(r, i){
       const cols = [ String(i+1), r.time, r.katch, r.katchName, r.close, r.deal, r.bw, r.emp,
         r.useMobile, r.useLine,
         String(Number(r.mobile.sbT)||0), String(Number(r.mobile.sbS)||0),
         String(Number(r.mobile.ymT)||0), String(Number(r.mobile.ymS)||0),
-        r.bb, r.denki, r.gas
+        r.bb, r.denki, r.gas, r.card
       ].map(function(c){
         const s = (c==null?"":String(c));
         if(s.indexOf(",")>=0||s.indexOf('"')>=0||s.indexOf("\n")>=0){ return '"'+s.split('"').join('""')+'"'; }
@@ -501,6 +505,10 @@ function App(){
                 <label>ガス</label>
                 <select value={form.gas} onChange={function(e){ setF("gas", e.target.value); }}>{selOpts(OX_OPTS)}</select>
               </div>
+              <div className="f-field">
+                <label>PayPayカード</label>
+                <select value={form.card} onChange={function(e){ setF("card", e.target.value); }}>{selOpts(CARD_OPTS)}</select>
+              </div>
             </div>
           </div>
 
@@ -575,6 +583,14 @@ function App(){
               <div className="tot-cards">
                 <div className="tcard"><div className="k">でんき ◯</div><div className="v">{totals.denkiO}</div></div>
                 <div className="tcard"><div className="k">ガス ◯</div><div className="v">{totals.gasO}</div></div>
+              </div>
+            </div>
+            <div className="tot-group">
+              <h3>PayPayカード</h3>
+              <div className="tot-cards">
+                <div className="tcard"><div className="k">ノーマル</div><div className="v">{totals.cardN}</div></div>
+                <div className="tcard"><div className="k">GOLD</div><div className="v">{totals.cardG}</div></div>
+                <div className="tcard accent"><div className="k">カード合計</div><div className="v">{totals.cardN + totals.cardG}</div></div>
               </div>
             </div>
           </div>
