@@ -121,6 +121,8 @@
   .mini-sel:focus{outline:none;background:#fff7d9;}
   .deal-ok{color:var(--ok);} .deal-ng{color:var(--ng);} .done{color:var(--done);font-weight:700;text-align:center;}
   .c-content{min-width:200px;}
+  .c-content .ci,.c-use .ci{white-space:nowrap;}
+  .c-use{white-space:normal;}
   .c-op{text-align:center;white-space:nowrap;}
 
   .hint{font-size:12px;color:var(--muted);margin:12px 2px 0;line-height:1.7;}
@@ -133,23 +135,14 @@
     thead th{background:#444 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
     @page{size:A4 portrait;margin:10mm;}
   }
-  /* 「印刷（1枚PDF）」用：A4縦1枚に自動縮小 */
-  .compact-print .wrap{width:700px;max-width:700px;padding:0;zoom:var(--print-scale,1);}
+  /* 「印刷（1枚PDF）」用：画面の表を比率そのままA4縦1枚に縮小 */
+  .compact-print .wrap{padding:0;zoom:var(--print-scale,1);}
   .compact-print .titlebar{margin-bottom:8px;}
   .compact-print .datebox{border:none;padding:0;background:transparent;}
   .compact-print .datebox label{display:none;}
   .compact-print .tabs,.compact-print .toolbar,.compact-print .hint,.compact-print .sync,.compact-print .x-btn,.compact-print .c-op{display:none !important;}
-  .compact-print .sheet{box-shadow:none;border-color:#888;margin-bottom:8px;}
+  .compact-print .sheet{box-shadow:none;}
   .compact-print .sheet .scroll{overflow:visible;}
-  .compact-print table{min-width:0 !important;width:100%;}
-  .compact-print th,.compact-print td{font-size:11px;padding:3px 5px;white-space:normal;}
-  .compact-print .card-box{padding:8px 10px;margin-bottom:8px;}
-  .compact-print .tot-group{margin-bottom:8px;}
-  .compact-print .tot-group h3{font-size:11px;margin-bottom:5px;}
-  .compact-print .tot-cards{gap:5px;}
-  .compact-print .tcard{min-width:62px;flex-basis:62px;padding:5px 7px;}
-  .compact-print .tcard .k{font-size:9px;margin-bottom:1px;}
-  .compact-print .tcard .v{font-size:15px;}
   @media (max-width:560px){
     .titlebar h1{font-size:17px;} .ymd{font-size:15px;}
   }
@@ -254,7 +247,7 @@ function cardTotalOf(r){ let t=0; const c=r.card||{}; for(let i=0;i<CARD_ITEMS.l
 function recHasAny(r){
   return !!(r.time||r.katch||r.katchName||r.close||r.deal||r.bw||r.emp||r.useMobile||r.useLine||mobTotalOf(r)||r.bb||r.denki||r.gas||cardTotalOf(r));
 }
-function summarize(r){
+function contentParts(r){
   const parts=[];
   for(let i=0;i<MOBILE_ITEMS.length;i++){
     const m=MOBILE_ITEMS[i]; const n=Number(r.mobile[m.key])||0;
@@ -268,8 +261,9 @@ function summarize(r){
     const ci=CARD_ITEMS[i]; const n=Number(c[ci.key])||0;
     if(n>0){ parts.push(ci.s+"×"+n); }
   }
-  return parts.join("、");
+  return parts;
 }
+function summarize(r){ return contentParts(r).join("、"); }
 
 function App(){
   const [dateStr, setDateStr] = useState(todayStr());
@@ -699,7 +693,6 @@ function App(){
                     ? <tr><td className="empty" colSpan="10">まだ登録がありません。「入力フォーム」タブから登録してください。</td></tr>
                     : records.map(function(r, i){
                         const name = (r.katch||"") + (r.katchName? " "+r.katchName : "");
-                        const use = (r.useMobile||"") + (r.useLine? (r.useMobile?" / ":"")+r.useLine : "");
                         return (
                           <tr key={r.id}>
                             <td className="rownum">{i+1}</td>
@@ -713,8 +706,16 @@ function App(){
                             <td className="c-sel">
                               <select className="mini-sel" value={r.emp} onChange={function(e){ updateRecord(r.id,"emp",e.target.value); }}>{selOpts(DONE_OPTS)}</select>
                             </td>
-                            <td>{use}</td>
-                            <td className="c-content">{summarize(r)}</td>
+                            <td className="c-use">
+                              {r.useMobile ? <span className="ci">{r.useMobile}</span> : null}
+                              {r.useMobile && r.useLine ? " / " : null}
+                              {r.useLine ? <span className="ci">{r.useLine}</span> : null}
+                            </td>
+                            <td className="c-content">
+                              {contentParts(r).map(function(p, idx){
+                                return <React.Fragment key={idx}>{idx>0?"、":""}<span className="ci">{p}</span></React.Fragment>;
+                              })}
+                            </td>
                             <td className="c-op"><button className="x-btn" onClick={function(){ deleteRecord(r.id); }}>削除</button></td>
                           </tr>
                         );
