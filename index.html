@@ -131,7 +131,25 @@
     .sheet{box-shadow:none;border-color:#888;}
     .wrap{padding:0;max-width:100%;}
     thead th{background:#444 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    @page{size:A4 portrait;margin:10mm;}
   }
+  /* 「印刷（1枚PDF）」用：A4縦1枚に自動縮小 */
+  .compact-print .wrap{width:700px;max-width:700px;padding:0;zoom:var(--print-scale,1);}
+  .compact-print .titlebar{margin-bottom:8px;}
+  .compact-print .datebox{border:none;padding:0;background:transparent;}
+  .compact-print .datebox label{display:none;}
+  .compact-print .tabs,.compact-print .toolbar,.compact-print .hint,.compact-print .sync,.compact-print .x-btn,.compact-print .c-op{display:none !important;}
+  .compact-print .sheet{box-shadow:none;border-color:#888;margin-bottom:8px;}
+  .compact-print .sheet .scroll{overflow:visible;}
+  .compact-print table{min-width:0 !important;width:100%;}
+  .compact-print th,.compact-print td{font-size:11px;padding:3px 5px;white-space:normal;}
+  .compact-print .card-box{padding:8px 10px;margin-bottom:8px;}
+  .compact-print .tot-group{margin-bottom:8px;}
+  .compact-print .tot-group h3{font-size:11px;margin-bottom:5px;}
+  .compact-print .tot-cards{gap:5px;}
+  .compact-print .tcard{min-width:62px;flex-basis:62px;padding:5px 7px;}
+  .compact-print .tcard .k{font-size:9px;margin-bottom:1px;}
+  .compact-print .tcard .v{font-size:15px;}
   @media (max-width:560px){
     .titlebar h1{font-size:17px;} .ymd{font-size:15px;}
   }
@@ -357,6 +375,31 @@ function App(){
   }, [setCard]);
 
   const resetForm = useCallback(function(){ setForm(emptyForm()); }, []);
+
+  const printOnePage = useCallback(function(){
+    const run = function(){
+      const root = document.querySelector(".wrap");
+      if(!root){ window.print(); return; }
+      document.body.classList.add("compact-print");
+      document.documentElement.style.setProperty("--print-scale", "1");
+      const w = root.scrollWidth || 700;
+      const h = root.scrollHeight || 1;
+      const PAGE_W = 700, PAGE_H = 1040;
+      let s = Math.min(PAGE_W / w, PAGE_H / h, 1);
+      s = Math.floor(s * 1000) / 1000;
+      if(!(s > 0)){ s = 1; }
+      document.documentElement.style.setProperty("--print-scale", String(s));
+      const cleanup = function(){
+        document.body.classList.remove("compact-print");
+        document.documentElement.style.removeProperty("--print-scale");
+        window.removeEventListener("afterprint", cleanup);
+      };
+      window.addEventListener("afterprint", cleanup);
+      window.print();
+    };
+    if(tab !== "sheet"){ setTab("sheet"); setTimeout(run, 80); }
+    else { run(); }
+  }, [tab]);
 
   const register = useCallback(function(){
     const f = form;
@@ -589,7 +632,7 @@ function App(){
         <div className="sheet-view">
           <div className="toolbar">
             <button className="btn" onClick={pullCloud}>再読込</button>
-            <button className="btn primary" onClick={function(){ window.print(); }}>印刷</button>
+            <button className="btn primary" onClick={printOnePage}>印刷（1枚PDF）</button>
             <button className="btn" onClick={exportCsv}>CSV出力</button>
             <button className="btn danger" onClick={clearDay}>この日を消去</button>
           </div>
@@ -637,621 +680,6 @@ function App(){
                   return <div className="tcard" key={ci.key}><div className="k">{ci.label}</div><div className="v">{totals.card[ci.key]}</div></div>;
                 })}
                 <div className="tcard accent"><div className="k">カード合計</div><div className="v">{totals.cardTotal}</div></div>
-              </div>
-            </div>
-          </div>
-
-          <div className="sheet">
-            <div className="scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th className="rownum"></th>
-                    <th>時間</th><th>キャッチ</th><th>クローズ</th><th>成約</th>
-                    <th>白黒</th><th>社員紹介</th><th>利用中</th><th>成約内容</th><th>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {records.length===0
-                    ? <tr><td className="empty" colSpan="10">まだ登録がありません。「入力フォーム」タブから登録してください。</td></tr>
-                    : records.map(function(r, i){
-                        const name = (r.katch||"") + (r.katchName? " "+r.katchName : "");
-                        const use = (r.useMobile||"") + (r.useLine? (r.useMobile?" / ":"")+r.useLine : "");
-                        return (
-                          <tr key={r.id}>
-                            <td className="rownum">{i+1}</td>
-                            <td className="c-time">{r.time}</td>
-                            <td>{name}</td>
-                            <td>{r.close}</td>
-                            <td className="c-deal-cell"><span className={dealCls(r.deal)}>{r.deal}</span></td>
-                            <td className="c-sel">
-                              <select className="mini-sel" value={r.bw} onChange={function(e){ updateRecord(r.id,"bw",e.target.value); }}>{selOpts(DONE_OPTS)}</select>
-                            </td>
-                            <td className="c-sel">
-                              <select className="mini-sel" value={r.emp} onChange={function(e){ updateRecord(r.id,"emp",e.target.value); }}>{selOpts(DONE_OPTS)}</select>
-                            </td>
-                            <td>{use}</td>
-                            <td className="c-content">{summarize(r)}</td>
-                            <td className="c-op"><button className="x-btn" onClick={function(){ deleteRecord(r.id); }}>削除</button></td>
-                          </tr>
-                        );
-                      })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="hint">
-            ・このシートは「入力フォーム」タブで登録した内容が一覧・集計されます。<br />
-            ・成約内容のモバイルは件数（複数獲得）に対応。集計の「モバイル合計」は全件数の総和です。<br />
-            ・成約率＝成約◯ ÷ 接客数 ×100（％）。各行の「削除」で取り消し。CSV出力・印刷に対応（印刷時は操作列を除外）。
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-</script>
-</body>
-</html>
-  .tabs{display:flex;gap:6px;margin-bottom:14px;}
-  .tab{flex:1;text-align:center;padding:12px;border:1px solid var(--line-strong);background:#fff;border-radius:9px;cursor:pointer;font-size:15px;font-weight:700;color:var(--muted);font-family:inherit;}
-  .tab.active{background:var(--head);color:#fff;border-color:var(--head);}
-
-  .btn{font-family:inherit;font-size:13px;cursor:pointer;border-radius:8px;padding:8px 14px;border:1px solid var(--line-strong);background:#fff;color:var(--ink);transition:background .12s ease;}
-  .btn:hover{background:#f0f3f8;}
-  .btn.primary{background:var(--head);border-color:var(--head);color:#fff;}
-  .btn.primary:hover{background:#3a424f;}
-  .btn.danger{color:var(--ng);border-color:#e0b4ae;}
-  .btn.danger:hover{background:#fbeeec;}
-
-  .card-box{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px;}
-  .card-box h2{font-size:15px;margin:0 0 14px;font-weight:700;letter-spacing:.04em;color:var(--head);}
-
-  .fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 12px;}
-  .f-field{display:flex;flex-direction:column;gap:4px;}
-  .f-field.wide{grid-column:1 / -1;}
-  .f-field label{font-size:11px;color:var(--muted);}
-  .f-field input,.f-field select{font-family:inherit;font-size:16px;border:1px solid var(--line-strong);border-radius:7px;padding:8px;color:var(--ink);background:#fff;width:100%;}
-  .f-field select{-webkit-appearance:none;appearance:none;}
-  .catch-field{grid-column:span 2;}
-  .catch-row{display:flex;gap:6px;}
-  .catch-row .catch-sel{flex:0 0 44%;width:auto;min-width:96px;}
-  .catch-row .catch-name{flex:1 1 auto;min-width:0;}
-  .time-row{display:flex;gap:6px;}
-  .time-row input{flex:1;}
-  .time-now{white-space:nowrap;font-family:inherit;font-size:13px;border:1px solid var(--line-strong);border-radius:7px;background:#f0f3f8;cursor:pointer;padding:0 12px;color:var(--ink);}
-  .time-now:hover{background:#e6ebf3;}
-
-  .sec-title{font-size:13px;font-weight:700;color:var(--head);margin:18px 0 8px;border-left:3px solid var(--accent);padding-left:8px;}
-  .content-box{border:1px solid var(--line);border-radius:9px;padding:12px;background:#fafbfd;}
-  .sub-lab{font-size:12px;color:var(--muted);margin:0 0 8px;font-weight:700;}
-  .mob-list{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;}
-  .mob-row{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:#fff;}
-  .mob-row .lab{font-size:14px;}
-  .stepper{display:flex;align-items:center;gap:6px;}
-  .stepper button{width:36px;height:36px;border:1px solid var(--line-strong);background:#f0f3f8;border-radius:7px;font-size:20px;cursor:pointer;line-height:1;color:var(--ink);font-family:inherit;}
-  .stepper button:hover{background:#e6ebf3;}
-  .stepper input{width:52px;height:36px;text-align:center;font-size:16px;border:1px solid var(--line-strong);border-radius:7px;font-family:inherit;color:var(--ink);}
-  .content-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px 12px;}
-
-  .entry-actions{display:flex;gap:8px;margin-top:16px;}
-
-  .recent{margin-top:18px;}
-  .recent h3{font-size:12px;color:var(--muted);margin:0 0 8px;font-weight:700;}
-  .rlist{display:flex;flex-direction:column;gap:6px;}
-  .ritem{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;background:#fff;}
-  .ritem .meta{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;}
-  .ritem .body{flex:1;min-width:0;}
-  .ritem .body b{color:var(--ink);}
-  .ritem .body .det{color:#4a5260;display:block;margin-top:2px;line-height:1.4;}
-  .x-btn{border:1px solid #e0b4ae;color:var(--ng);background:#fff;border-radius:7px;cursor:pointer;font-size:12px;padding:5px 9px;font-family:inherit;white-space:nowrap;}
-  .x-btn:hover{background:#fbeeec;}
-  .empty{color:var(--muted);font-size:13px;padding:14px;text-align:center;}
-
-  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px;}
-
-  .tot-group{margin-bottom:16px;}
-  .sheet-view{display:flex;flex-direction:column;}
-  .sheet-view .toolbar{order:1;}
-  .sheet-view .sheet{order:2;margin-bottom:14px;}
-  .sheet-view .card-box{order:3;}
-  .sheet-view .hint{order:4;}
-  .tot-group h3{font-size:13px;margin:0 0 8px;color:var(--head);border-left:3px solid var(--accent);padding-left:8px;font-weight:700;}
-  .tot-cards{display:flex;flex-wrap:wrap;gap:8px;}
-  .tcard{background:#fff;border:1px solid var(--line);border-radius:9px;padding:9px 14px;min-width:96px;text-align:center;flex:1 1 96px;}
-  .tcard .k{font-size:11px;color:var(--muted);margin-bottom:2px;}
-  .tcard .v{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;}
-  .tcard.accent{border-color:#b8c6da;background:#eef4fb;}
-  .tcard.accent .v{color:var(--accent);}
-
-  .sheet{background:var(--paper);border:1px solid var(--line-strong);border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(20,30,50,.06);}
-  .scroll{overflow-x:auto;}
-  table{border-collapse:collapse;width:100%;min-width:880px;}
-  th,td{border:1px solid var(--line);padding:7px 8px;font-size:13px;}
-  thead th{background:var(--head);color:#fff;font-weight:600;letter-spacing:.03em;white-space:nowrap;}
-  tbody tr:nth-child(even) td{background:var(--zebra);}
-  .rownum{width:34px;text-align:center;color:var(--muted);background:#f1f4f8;font-variant-numeric:tabular-nums;}
-  .c-time{white-space:nowrap;font-variant-numeric:tabular-nums;text-align:center;}
-  .c-deal{text-align:center;font-weight:700;}
-  .c-deal-cell{text-align:center;font-weight:700;}
-  .c-sel{padding:2px;}
-  .mini-sel{width:100%;border:1px solid var(--line);border-radius:6px;background:#fff;font-family:inherit;font-size:13px;padding:5px 4px;color:var(--ink);text-align:center;-webkit-appearance:none;appearance:none;cursor:pointer;}
-  .mini-sel:focus{outline:none;background:#fff7d9;}
-  .deal-ok{color:var(--ok);} .deal-ng{color:var(--ng);} .done{color:var(--done);font-weight:700;text-align:center;}
-  .c-content{min-width:200px;}
-  .c-op{text-align:center;white-space:nowrap;}
-
-  .hint{font-size:12px;color:var(--muted);margin:12px 2px 0;line-height:1.7;}
-
-  @media print{
-    body{background:#fff;}
-    .tabs,.toolbar,.hint,.datebox label,.x-btn,.c-op{display:none;}
-    .sheet{box-shadow:none;border-color:#888;}
-    .wrap{padding:0;max-width:100%;}
-    thead th{background:#444 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-  }
-  @media (max-width:560px){
-    .titlebar h1{font-size:17px;} .ymd{font-size:15px;}
-  }
-</style>
-</head>
-<body>
-<div id="root"></div>
-<script type="text/babel">
-const { useState, useEffect, useMemo, useCallback, useRef } = React;
-
-const WD = ["日","月","火","水","木","金","土"];
-const KATCH_OPTS = ["", "社員", "Panasonic", "SONY", "REGZA", "SHARP", "Hisense"];
-const DONE_OPTS = ["", "済"];
-const OX_OPTS = ["", "◯", "✕"];
-const USE_MOBILE_OPTS = ["", "docomo", "ahamo", "au", "UQ", "SB", "YM", "楽天", "格安"];
-const USE_LINE_OPTS = ["", "ドコモ光", "home5G", "au光", "UQ WiMAX", "BIGLOBE光", "SB光", "NURO光", "Air", "CATV", "菅込", "その他", "未利用"];
-const MOBILE_ITEMS = [
-  { key:"sbT", label:"SB 端末MNP" },
-  { key:"sbS", label:"SB SIM MNP" },
-  { key:"ymT", label:"YM 端末MNP" },
-  { key:"ymS", label:"YM SIM MNP" }
-];
-const BB_OPTS = ["", "1G光新規", "1G光事変", "10G光新規", "Air新規", "Air機変"];
-const CARD_OPTS = ["", "ノーマル", "GOLD"];
-
-function pad(n){ return n < 10 ? "0" + n : "" + n; }
-function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
-function nowHM(){ const d=new Date(); return pad(d.getHours())+":"+pad(d.getMinutes()); }
-function newId(){ return "" + Date.now() + "_" + Math.floor(Math.random()*100000); }
-function emptyMobile(){ return { sbT:0, sbS:0, ymT:0, ymS:0 }; }
-function emptyForm(){
-  return { time:"", katch:"", katchName:"", close:"", deal:"", bw:"", emp:"",
-    useMobile:"", useLine:"", mobile:emptyMobile(), bb:"", denki:"", gas:"", card:"" };
-}
-function storeKey(d){ return "uriage_nippo_v2_" + d; }
-const LS_STORE_KEY = "uriage_nippo_store_v1";
-
-/* ============================================================
-   ★ 他端末と共有する設定（JSONBin.io）★
-   ① https://jsonbin.io/ で無料登録 → 「CREATE BIN」で中身 {} の
-      ビンを1つ作る → その Bin ID をコピー
-   ② API KEYS から Master Key（または対象ビンに read/update 権限を
-      付けた Access Key）をコピー
-   ③ 下の2行に貼り付けて、CLOUD_ENABLED を true にして再デプロイ
-   これで、このURLを開いた全端末が同じデータを見られます。
-   ※ キーはページのソースから見えます。店舗内専用ツール用途として、
-     可能なら Master Key ではなく権限を絞った Access Key を推奨。
-     Access Key を使う場合は CLOUD_KEY_HEADER を "X-Access-Key" に。
-   ============================================================ */
-const CLOUD_ENABLED = true;
-const JSONBIN_BIN_ID = "6a3695feda38895dfee2d382";
-const JSONBIN_KEY    = "$2a$10$kb4606NT2s7sIqqcPuGTGefZ2uIaVqlXUD.T25aB0gi4KRdO5Ir22";
-const CLOUD_KEY_HEADER = "X-Master-Key";
-const JSONBIN_BASE = "https://api.jsonbin.io/v3/b";
-
-function cloudReady(){
-  return CLOUD_ENABLED && JSONBIN_BIN_ID.indexOf("貼る") < 0 && JSONBIN_KEY.indexOf("貼る") < 0;
-}
-function normalizeStore(obj){
-  const out = {};
-  if(obj && typeof obj === "object"){
-    Object.keys(obj).forEach(function(d){
-      const arr = obj[d];
-      if(Array.isArray(arr)){ out[d] = arr.map(normalizeRec).filter(recHasAny); }
-    });
-  }
-  return out;
-}
-function migrateOldKeys(){
-  const out = {};
-  try{
-    for(let i=0;i<window.localStorage.length;i++){
-      const k = window.localStorage.key(i);
-      if(k && k.indexOf("uriage_nippo_v2_") === 0){
-        const d = k.substring("uriage_nippo_v2_".length);
-        const p = JSON.parse(window.localStorage.getItem(k));
-        if(Array.isArray(p)){ out[d] = p; }
-      }
-    }
-  }catch(e){}
-  return out;
-}
-
-function normalizeRec(o){
-  o = o || {};
-  const m = Object.assign(emptyMobile(), o.mobile || {});
-  return { id:o.id || newId(), time:o.time||"", katch:o.katch||"", katchName:o.katchName||"",
-    close:o.close||"", deal:o.deal||"", bw:o.bw||"", emp:o.emp||"",
-    useMobile:o.useMobile||"", useLine:o.useLine||"", mobile:m, bb:o.bb||"", denki:o.denki||"", gas:o.gas||"", card:o.card||"" };
-}
-function mobTotalOf(r){ let t=0; for(let i=0;i<MOBILE_ITEMS.length;i++){ t += Number(r.mobile[MOBILE_ITEMS[i].key])||0; } return t; }
-function recHasAny(r){
-  return !!(r.time||r.katch||r.katchName||r.close||r.deal||r.bw||r.emp||r.useMobile||r.useLine||mobTotalOf(r)||r.bb||r.denki||r.gas||r.card);
-}
-function summarize(r){
-  const parts=[];
-  for(let i=0;i<MOBILE_ITEMS.length;i++){
-    const m=MOBILE_ITEMS[i]; const n=Number(r.mobile[m.key])||0;
-    if(n>0){ parts.push(m.label+"×"+n); }
-  }
-  if(r.bb){ parts.push(r.bb); }
-  if(r.denki){ parts.push("でんき"+r.denki); }
-  if(r.gas){ parts.push("ガス"+r.gas); }
-  if(r.card){ parts.push("PayPayカード "+r.card); }
-  return parts.join("、");
-}
-
-function App(){
-  const [dateStr, setDateStr] = useState(todayStr());
-  const [tab, setTab] = useState("entry");
-  const [store, setStore] = useState({});
-  const [form, setForm] = useState(emptyForm());
-  const [sync, setSync] = useState(cloudReady() ? "loading" : "local");
-
-  const dateRef = useRef(dateStr);
-  useEffect(function(){ dateRef.current = dateStr; }, [dateStr]);
-  const loadedRef = useRef(false);
-  const saveTimer = useRef(null);
-
-  const records = store[dateStr] || [];
-
-  const setRecords = useCallback(function(updater){
-    setStore(function(ps){
-      const d = dateRef.current;
-      const cur = ps[d] || [];
-      const next = (typeof updater === "function") ? updater(cur) : updater;
-      const ns = Object.assign({}, ps); ns[d] = next; return ns;
-    });
-  }, []);
-
-  const pullCloud = useCallback(function(){
-    if(!cloudReady()){ return; }
-    setSync("loading");
-    const headers = {}; headers[CLOUD_KEY_HEADER] = JSONBIN_KEY;
-    fetch(JSONBIN_BASE + "/" + JSONBIN_BIN_ID + "/latest", { headers: headers })
-      .then(function(r){ if(!r.ok){ throw new Error("http " + r.status); } return r.json(); })
-      .then(function(j){
-        const rec = (j && j.record) ? j.record : {};
-        loadedRef.current = true;
-        setStore(normalizeStore(rec));
-        setSync("saved");
-      })
-      .catch(function(e){ loadedRef.current = true; setSync("error"); });
-  }, []);
-
-  // 初回ロード：ローカル即時 → クラウド取得
-  useEffect(function(){
-    let local = null;
-    try{
-      const raw = window.localStorage.getItem(LS_STORE_KEY);
-      if(raw){ local = JSON.parse(raw); }
-    }catch(e){}
-    if(!local || Object.keys(local).length === 0){ local = migrateOldKeys(); }
-    if(local && Object.keys(local).length > 0){ setStore(normalizeStore(local)); }
-    if(cloudReady()){ pullCloud(); }
-    else { loadedRef.current = true; }
-  }, [pullCloud]);
-
-  // 保存：ローカルは即時、クラウドはデバウンスPUT
-  useEffect(function(){
-    try{ window.localStorage.setItem(LS_STORE_KEY, JSON.stringify(store)); }catch(e){}
-    if(!cloudReady()){ return; }
-    if(!loadedRef.current){ return; }
-    setSync("saving");
-    if(saveTimer.current){ clearTimeout(saveTimer.current); }
-    saveTimer.current = setTimeout(function(){
-      const headers = { "Content-Type":"application/json" }; headers[CLOUD_KEY_HEADER] = JSONBIN_KEY;
-      fetch(JSONBIN_BASE + "/" + JSONBIN_BIN_ID, { method:"PUT", headers: headers, body: JSON.stringify(store) })
-        .then(function(r){ if(!r.ok){ throw new Error("http " + r.status); } setSync("saved"); })
-        .catch(function(e){ setSync("error"); });
-    }, 800);
-  }, [store]);
-
-  const ymd = useMemo(function(){
-    const p = dateStr.split("-");
-    const dt = new Date(Number(p[0]), Number(p[1])-1, Number(p[2]));
-    return { y:p[0], m:String(Number(p[1])), d:String(Number(p[2])), wd:WD[dt.getDay()] };
-  }, [dateStr]);
-
-  const setF = useCallback(function(field, value){
-    setForm(function(p){ const n=Object.assign({},p); n[field]=value; return n; });
-  }, []);
-  const setMobile = useCallback(function(key, value){
-    setForm(function(p){ const nm=Object.assign({},p.mobile); nm[key]=value; return Object.assign({},p,{mobile:nm}); });
-  }, []);
-  const adjustMobile = useCallback(function(key, delta){
-    setForm(function(p){
-      let v=(Number(p.mobile[key])||0)+delta; if(v<0)v=0;
-      const nm=Object.assign({},p.mobile); nm[key]=v; return Object.assign({},p,{mobile:nm});
-    });
-  }, []);
-  const onMobileInput = useCallback(function(key, e){
-    const digits = e.target.value.replace(/[^0-9]/g,"");
-    setMobile(key, digits==="" ? 0 : parseInt(digits,10));
-  }, [setMobile]);
-
-  const resetForm = useCallback(function(){ setForm(emptyForm()); }, []);
-
-  const register = useCallback(function(){
-    const f = form;
-    const mob = emptyMobile(); let mt=0;
-    for(let i=0;i<MOBILE_ITEMS.length;i++){ const k=MOBILE_ITEMS[i].key; const n=Number(f.mobile[k])||0; mob[k]=n; mt+=n; }
-    const has = f.katch||f.katchName||f.close||f.deal||f.bw||f.emp||f.useMobile||f.useLine||mt||f.bb||f.denki||f.gas||f.card;
-    if(!has){ window.alert("内容を入力してください。"); return; }
-    const rec = { id:newId(), time:f.time?f.time:nowHM(), katch:f.katch, katchName:f.katchName,
-      close:f.close, deal:f.deal, bw:f.bw, emp:f.emp, useMobile:f.useMobile, useLine:f.useLine,
-      mobile:mob, bb:f.bb, denki:f.denki, gas:f.gas, card:f.card };
-    setRecords(function(prev){ return prev.concat([rec]); });
-    resetForm();
-  }, [form, resetForm]);
-
-  const deleteRecord = useCallback(function(id){
-    setRecords(function(prev){ return prev.filter(function(r){ return r.id !== id; }); });
-  }, []);
-
-  const updateRecord = useCallback(function(id, field, value){
-    setRecords(function(prev){
-      return prev.map(function(r){
-        if(r.id !== id){ return r; }
-        const n = Object.assign({}, r); n[field] = value; return n;
-      });
-    });
-  }, []);
-
-  const clearDay = useCallback(function(){
-    if(window.confirm("この日の登録をすべて消去します。よろしいですか？")){ setRecords([]); }
-  }, []);
-
-  const totals = useMemo(function(){
-    const mob = emptyMobile(); let mobTotal=0;
-    const bb = {}; for(let i=1;i<BB_OPTS.length;i++){ bb[BB_OPTS[i]]=0; }
-    let denkiO=0, gasO=0, dealO=0, dealX=0, bwDone=0, empDone=0, cardN=0, cardG=0;
-    records.forEach(function(r){
-      for(let i=0;i<MOBILE_ITEMS.length;i++){ const k=MOBILE_ITEMS[i].key; const n=Number(r.mobile[k])||0; mob[k]+=n; mobTotal+=n; }
-      if(r.bb && bb.hasOwnProperty(r.bb)){ bb[r.bb]+=1; }
-      if(r.denki==="◯") denkiO++;
-      if(r.gas==="◯") gasO++;
-      if(r.card==="ノーマル") cardN++;
-      if(r.card==="GOLD") cardG++;
-      if(r.deal==="◯") dealO++;
-      if(r.deal==="✕") dealX++;
-      if(r.bw==="済") bwDone++;
-      if(r.emp==="済") empDone++;
-    });
-    return { mob:mob, mobTotal:mobTotal, bb:bb, denkiO:denkiO, gasO:gasO, cardN:cardN, cardG:cardG,
-      dealO:dealO, dealX:dealX, bwDone:bwDone, empDone:empDone, count:records.length,
-      rate: records.length>0 ? Math.round((dealO/records.length)*1000)/10 : null };
-  }, [records]);
-
-  const exportCsv = useCallback(function(){
-    const head = ["No","時間","キャッチ区分","キャッチ名前","クローズ","成約","白黒","社員紹介",
-      "現在利用中(携帯)","現在利用中(回線)","SB端末MNP","SB SIM MNP","YM端末MNP","YM SIM MNP","BB","でんき","ガス","PayPayカード"];
-    const lines = [head.join(",")];
-    records.forEach(function(r, i){
-      const cols = [ String(i+1), r.time, r.katch, r.katchName, r.close, r.deal, r.bw, r.emp,
-        r.useMobile, r.useLine,
-        String(Number(r.mobile.sbT)||0), String(Number(r.mobile.sbS)||0),
-        String(Number(r.mobile.ymT)||0), String(Number(r.mobile.ymS)||0),
-        r.bb, r.denki, r.gas, r.card
-      ].map(function(c){
-        const s = (c==null?"":String(c));
-        if(s.indexOf(",")>=0||s.indexOf('"')>=0||s.indexOf("\n")>=0){ return '"'+s.split('"').join('""')+'"'; }
-        return s;
-      });
-      lines.push(cols.join(","));
-    });
-    const csv = lines.join("\r\n");
-    const blob = new Blob([new Uint8Array([0xEF,0xBB,0xBF]), csv], { type:"text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "接客日報_"+dateStr+".csv";
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, [records, dateStr]);
-
-  function selOpts(arr){
-    return arr.map(function(o){ return <option key={o} value={o}>{o===""?"−":o}</option>; });
-  }
-  function dealCls(v){ return v==="◯"?"c-deal deal-ok":(v==="✕"?"c-deal deal-ng":"c-deal"); }
-
-  const recent = records.slice().reverse().slice(0,6);
-
-  return (
-    <div className="wrap">
-      <div className="titlebar">
-        <h1>接客日報<span>キャッチ → クローズ → 成約の記録シート</span></h1>
-        <div className="datebox">
-          <label htmlFor="d">日付</label>
-          <input id="d" type="date" value={dateStr} onChange={function(e){ setDateStr(e.target.value); }} />
-          <span className="ymd">{ymd.y}/{ymd.m}/{ymd.d}（<span className="wd">{ymd.wd}</span>）</span>
-        </div>
-        <span className={"sync sync-"+sync} onClick={pullCloud} title="タップで再読み込み">{
-          sync==="loading" ? "読込中…" :
-          sync==="saving" ? "保存中…" :
-          sync==="saved" ? "● 同期済み" :
-          sync==="error" ? "△ 同期エラー（タップで再試行）" :
-          "ローカル保存のみ"
-        }</span>
-      </div>
-
-      <div className="tabs">
-        <div className={tab==="entry"?"tab active":"tab"} onClick={function(){ setTab("entry"); }}>入力フォーム</div>
-        <div className={tab==="sheet"?"tab active":"tab"} onClick={function(){ setTab("sheet"); }}>集計シート（{records.length}）</div>
-      </div>
-
-      {tab==="entry" ? (
-        <div className="card-box">
-          <h2>新規入力</h2>
-          <div className="fgrid">
-            <div className="f-field">
-              <label>時間</label>
-              <div className="time-row">
-                <input value={form.time} placeholder="登録時に自動" onChange={function(e){ setF("time", e.target.value); }} />
-                <button type="button" className="time-now" onClick={function(){ setF("time", nowHM()); }}>現在</button>
-              </div>
-            </div>
-            <div className="f-field catch-field">
-              <label>キャッチ</label>
-              <div className="catch-row">
-                <select className="catch-sel" value={form.katch} onChange={function(e){ setF("katch", e.target.value); }}>{selOpts(KATCH_OPTS)}</select>
-                <input className="catch-name" placeholder="名前" value={form.katchName} onChange={function(e){ setF("katchName", e.target.value); }} />
-              </div>
-            </div>
-            <div className="f-field">
-              <label>クローズ</label>
-              <input value={form.close} onChange={function(e){ setF("close", e.target.value); }} />
-            </div>
-            <div className="f-field">
-              <label>成約</label>
-              <select value={form.deal} onChange={function(e){ setF("deal", e.target.value); }}>{selOpts(OX_OPTS)}</select>
-            </div>
-            <div className="f-field">
-              <label>現在利用中（携帯）</label>
-              <select value={form.useMobile} onChange={function(e){ setF("useMobile", e.target.value); }}>{selOpts(USE_MOBILE_OPTS)}</select>
-            </div>
-            <div className="f-field">
-              <label>現在利用中（回線）</label>
-              <select value={form.useLine} onChange={function(e){ setF("useLine", e.target.value); }}>{selOpts(USE_LINE_OPTS)}</select>
-            </div>
-          </div>
-
-          <div className="sec-title">成約内容</div>
-          <div className="content-box">
-            <p className="sub-lab">モバイル（件数）</p>
-            <div className="mob-list">
-              {MOBILE_ITEMS.map(function(m){
-                const v = Number(form.mobile[m.key])||0;
-                return (
-                  <div className="mob-row" key={m.key}>
-                    <span className="lab">{m.label}</span>
-                    <span className="stepper">
-                      <button type="button" onClick={function(){ adjustMobile(m.key,-1); }}>−</button>
-                      <input inputMode="numeric" value={v===0?"":String(v)}
-                        onChange={function(e){ onMobileInput(m.key,e); }} />
-                      <button type="button" onClick={function(){ adjustMobile(m.key,1); }}>＋</button>
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="content-grid">
-              <div className="f-field">
-                <label>BB</label>
-                <select value={form.bb} onChange={function(e){ setF("bb", e.target.value); }}>{selOpts(BB_OPTS)}</select>
-              </div>
-              <div className="f-field">
-                <label>でんき</label>
-                <select value={form.denki} onChange={function(e){ setF("denki", e.target.value); }}>{selOpts(OX_OPTS)}</select>
-              </div>
-              <div className="f-field">
-                <label>ガス</label>
-                <select value={form.gas} onChange={function(e){ setF("gas", e.target.value); }}>{selOpts(OX_OPTS)}</select>
-              </div>
-              <div className="f-field">
-                <label>PayPayカード</label>
-                <select value={form.card} onChange={function(e){ setF("card", e.target.value); }}>{selOpts(CARD_OPTS)}</select>
-              </div>
-            </div>
-          </div>
-
-          <div className="entry-actions">
-            <button type="button" className="btn primary" onClick={register}>登録</button>
-            <button type="button" className="btn" onClick={resetForm}>クリア</button>
-          </div>
-
-          <div className="recent">
-            <h3>直近の登録</h3>
-            {recent.length===0
-              ? <div className="empty">まだ登録がありません</div>
-              : <div className="rlist">
-                  {recent.map(function(r){
-                    const s = summarize(r);
-                    const name = (r.katch || "") + (r.katchName ? " " + r.katchName : "");
-                    return (
-                      <div className="ritem" key={r.id}>
-                        <span className="meta">{r.time}</span>
-                        <span className="body">
-                          <b>{name || "（キャッチ未入力）"}</b>
-                          {r.deal ? <b style={{marginLeft:"6px",color:r.deal==="◯"?"#1f8a4c":"#c1392b"}}>{r.deal}</b> : null}
-                          <span className="det">{s || "成約内容なし"}</span>
-                        </span>
-                        <button className="x-btn" onClick={function(){ deleteRecord(r.id); }}>削除</button>
-                      </div>
-                    );
-                  })}
-                </div>}
-          </div>
-        </div>
-      ) : (
-        <div className="sheet-view">
-          <div className="toolbar">
-            <button className="btn" onClick={pullCloud}>再読込</button>
-            <button className="btn primary" onClick={function(){ window.print(); }}>印刷</button>
-            <button className="btn" onClick={exportCsv}>CSV出力</button>
-            <button className="btn danger" onClick={clearDay}>この日を消去</button>
-          </div>
-
-          <div className="card-box">
-            <div className="tot-group">
-              <h3>概況</h3>
-              <div className="tot-cards">
-                <div className="tcard"><div className="k">接客数</div><div className="v">{totals.count}</div></div>
-                <div className="tcard"><div className="k">成約 ◯</div><div className="v" style={{color:"#1f8a4c"}}>{totals.dealO}</div></div>
-                <div className="tcard"><div className="k">成約 ✕</div><div className="v" style={{color:"#c1392b"}}>{totals.dealX}</div></div>
-                <div className="tcard accent"><div className="k">成約率</div><div className="v">{totals.rate===null?"−":totals.rate+"%"}</div></div>
-                <div className="tcard"><div className="k">白黒 済</div><div className="v">{totals.bwDone}</div></div>
-                <div className="tcard"><div className="k">社員紹介 済</div><div className="v">{totals.empDone}</div></div>
-              </div>
-            </div>
-            <div className="tot-group">
-              <h3>モバイル</h3>
-              <div className="tot-cards">
-                {MOBILE_ITEMS.map(function(m){
-                  return <div className="tcard" key={m.key}><div className="k">{m.label}</div><div className="v">{totals.mob[m.key]}</div></div>;
-                })}
-                <div className="tcard accent"><div className="k">モバイル合計</div><div className="v">{totals.mobTotal}</div></div>
-              </div>
-            </div>
-            <div className="tot-group">
-              <h3>BB</h3>
-              <div className="tot-cards">
-                {BB_OPTS.slice(1).map(function(o){
-                  return <div className="tcard" key={o}><div className="k">{o}</div><div className="v">{totals.bb[o]}</div></div>;
-                })}
-              </div>
-            </div>
-            <div className="tot-group">
-              <h3>でんき・ガス</h3>
-              <div className="tot-cards">
-                <div className="tcard"><div className="k">でんき ◯</div><div className="v">{totals.denkiO}</div></div>
-                <div className="tcard"><div className="k">ガス ◯</div><div className="v">{totals.gasO}</div></div>
-              </div>
-            </div>
-            <div className="tot-group">
-              <h3>PayPayカード</h3>
-              <div className="tot-cards">
-                <div className="tcard"><div className="k">ノーマル</div><div className="v">{totals.cardN}</div></div>
-                <div className="tcard"><div className="k">GOLD</div><div className="v">{totals.cardG}</div></div>
-                <div className="tcard accent"><div className="k">カード合計</div><div className="v">{totals.cardN + totals.cardG}</div></div>
               </div>
             </div>
           </div>
