@@ -386,7 +386,7 @@ function App(){
       const useArr = [];
       if(r.useMobile){ useArr.push('<span class="nw">' + esc(r.useMobile) + '</span>'); }
       if(r.useLine){ useArr.push('<span class="nw">' + esc(r.useLine) + '</span>'); }
-      const cHtml = contentParts(r).map(function(p){ return '<span class="nw">' + esc(p) + '</span>'; }).join("、");
+      const cHtml = contentParts(r).map(function(p){ return '<span class="nw">' + esc(p) + '</span>'; }).join("<br>");
       const dc = r.deal==="◯" ? "#1f8a4c" : (r.deal==="✕" ? "#c1392b" : "#1f2530");
       rowsHtml += '<tr>'
         + '<td class="num">' + (i+1) + '</td>'
@@ -427,7 +427,7 @@ function App(){
 
     const inner = '<style>' + scoped + '</style>'
       + '<div class="head"><div><div class="h-title">接客日報</div><div class="h-sub">キャッチ → クローズ → 成約の記録シート</div></div><div class="h-date">' + dateText + '</div></div>'
-      + '<table><colgroup><col style="width:26px"><col style="width:42px"><col style="width:104px"><col style="width:58px"><col style="width:38px"><col style="width:38px"><col style="width:52px"><col style="width:120px"><col></colgroup><thead><tr><th></th><th>時間</th><th>キャッチ</th><th>クローズ</th><th>成約</th><th>白黒</th><th>社員紹介</th><th>利用中</th><th>成約内容</th></tr></thead><tbody>' + rowsHtml + '</tbody></table>'
+      + '<table><colgroup><col style="width:26px"><col style="width:42px"><col style="width:110px"><col style="width:46px"><col style="width:36px"><col style="width:36px"><col style="width:52px"><col style="width:116px"><col></colgroup><thead><tr><th></th><th>時間</th><th>キャッチ</th><th>クローズ</th><th>成約</th><th>白黒</th><th>社員紹介</th><th>利用中</th><th>成約内容</th></tr></thead><tbody>' + rowsHtml + '</tbody></table>'
       + '<div class="sec">概況</div><div class="cards">' + gOverview + '</div>'
       + '<div class="sec">モバイル</div><div class="cards">' + gMobile + '</div>'
       + '<div class="sec">BB</div><div class="cards">' + gBB + '</div>'
