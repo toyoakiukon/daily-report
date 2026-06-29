@@ -7,6 +7,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root{
     --ink:#1f2530; --line:#c9ced8; --line-strong:#9aa3b2;
@@ -43,6 +45,7 @@
   .btn:hover{background:#f0f3f8;}
   .btn.primary{background:var(--head);border-color:var(--head);color:#fff;}
   .btn.primary:hover{background:#3a424f;}
+  .btn:disabled{opacity:.6;cursor:default;}
   .btn.danger{color:var(--ng);border-color:#e0b4ae;}
   .btn.danger:hover{background:#fbeeec;}
 
@@ -88,6 +91,11 @@
   .ritem .body .det{color:#4a5260;display:block;margin-top:2px;line-height:1.4;}
   .x-btn{border:1px solid #e0b4ae;color:var(--ng);background:#fff;border-radius:7px;cursor:pointer;font-size:12px;padding:5px 9px;font-family:inherit;white-space:nowrap;}
   .x-btn:hover{background:#fbeeec;}
+  .e-btn{border:1px solid #b8c6da;color:var(--accent);background:#fff;border-radius:7px;cursor:pointer;font-size:12px;padding:5px 9px;font-family:inherit;white-space:nowrap;}
+  .e-btn:hover{background:#eef4fb;}
+  .ritem-ops{display:flex;gap:6px;flex-shrink:0;}
+  .c-op{white-space:nowrap;}
+  .c-op .e-btn{margin-right:4px;}
   .empty{color:var(--muted);font-size:13px;padding:14px;text-align:center;}
 
   .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px;}
@@ -135,14 +143,6 @@
     thead th{background:#444 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
     @page{size:A4 portrait;margin:10mm;}
   }
-  /* 「印刷（1枚PDF）」用：実寸を縮小してA4縦1枚に収める（transform方式） */
-  .compact-print .wrap{padding:0 !important;max-width:none !important;}
-  .compact-print .titlebar{margin-bottom:8px;}
-  .compact-print .datebox{border:none;padding:0;background:transparent;}
-  .compact-print .datebox label{display:none;}
-  .compact-print .tabs,.compact-print .toolbar,.compact-print .hint,.compact-print .sync,.compact-print .x-btn,.compact-print .c-op{display:none !important;}
-  .compact-print .sheet{box-shadow:none;}
-  .compact-print .sheet .scroll{overflow:visible !important;}
   @media (max-width:560px){
     .titlebar h1{font-size:17px;} .ymd{font-size:15px;}
   }
@@ -270,10 +270,11 @@ function App(){
   const [tab, setTab] = useState("entry");
   const [store, setStore] = useState({});
   const [form, setForm] = useState(emptyForm());
+  const [editingId, setEditingId] = useState(null);
   const [sync, setSync] = useState(cloudReady() ? "loading" : "local");
 
   const dateRef = useRef(dateStr);
-  useEffect(function(){ dateRef.current = dateStr; }, [dateStr]);
+  useEffect(function(){ dateRef.current = dateStr; setEditingId(null); }, [dateStr]);
   const loadedRef = useRef(false);
   const saveTimer = useRef(null);
 
@@ -370,40 +371,115 @@ function App(){
 
   const resetForm = useCallback(function(){ setForm(emptyForm()); }, []);
 
-  const printOnePage = useCallback(function(){
-    const run = function(){
-      const root = document.querySelector(".wrap");
-      const rootEl = document.getElementById("root");
-      if(!root || !rootEl){ window.print(); return; }
-      document.body.classList.add("compact-print");
-      root.style.transform = "none"; root.style.width = "";
-      rootEl.style.width = ""; rootEl.style.height = ""; rootEl.style.overflow = "";
-      const tableEl = root.querySelector(".sheet table");
-      const tableW = tableEl ? tableEl.scrollWidth : 0;
-      const w = Math.max(root.scrollWidth || 0, tableW, 700);
-      const h = root.scrollHeight || 1;
-      const PAGE_W = 700, PAGE_H = 1020;
-      let s = Math.min(PAGE_W / w, PAGE_H / h, 1);
-      s = Math.floor(s * 1000) / 1000;
-      if(!(s > 0)){ s = 1; }
-      root.style.width = w + "px";
-      root.style.transformOrigin = "top left";
-      root.style.transform = "scale(" + s + ")";
-      rootEl.style.width = Math.ceil(w * s) + "px";
-      rootEl.style.height = Math.ceil(h * s) + "px";
-      rootEl.style.overflow = "hidden";
-      const cleanup = function(){
-        document.body.classList.remove("compact-print");
-        root.style.transform = ""; root.style.width = ""; root.style.transformOrigin = "";
-        rootEl.style.width = ""; rootEl.style.height = ""; rootEl.style.overflow = "";
-        window.removeEventListener("afterprint", cleanup);
-      };
-      window.addEventListener("afterprint", cleanup);
-      window.print();
+  const [pdfBusy, setPdfBusy] = useState(false);
+
+  const makePdf = useCallback(function(){
+    const esc = function(x){ return String(x==null?"":x).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); };
+    const dateText = ymd.y + "/" + ymd.m + "/" + ymd.d + "（" + ymd.wd + "）";
+
+    let rowsHtml = "";
+    if(records.length === 0){
+      rowsHtml = '<tr><td colspan="9" style="text-align:center;color:#7a8494;padding:14px">登録がありません</td></tr>';
+    }
+    records.forEach(function(r, i){
+      const name = (r.katch||"") + (r.katchName ? " " + r.katchName : "");
+      const useArr = [];
+      if(r.useMobile){ useArr.push('<span class="nw">' + esc(r.useMobile) + '</span>'); }
+      if(r.useLine){ useArr.push('<span class="nw">' + esc(r.useLine) + '</span>'); }
+      const cHtml = contentParts(r).map(function(p){ return '<span class="nw">' + esc(p) + '</span>'; }).join("、");
+      const dc = r.deal==="◯" ? "#1f8a4c" : (r.deal==="✕" ? "#c1392b" : "#1f2530");
+      rowsHtml += '<tr>'
+        + '<td class="num">' + (i+1) + '</td>'
+        + '<td class="ce">' + esc(r.time) + '</td>'
+        + '<td>' + esc(name) + '</td>'
+        + '<td>' + esc(r.close) + '</td>'
+        + '<td class="ce" style="color:' + dc + ';font-weight:700">' + esc(r.deal) + '</td>'
+        + '<td class="ce">' + esc(r.bw) + '</td>'
+        + '<td class="ce">' + esc(r.emp) + '</td>'
+        + '<td>' + useArr.join(" / ") + '</td>'
+        + '<td>' + cHtml + '</td>'
+        + '</tr>';
+    });
+
+    const tcards = function(arr){
+      return arr.map(function(x){ return '<div class="tc"><div class="tk">' + esc(x[0]) + '</div><div class="tv">' + esc(x[1]) + '</div></div>'; }).join("");
     };
-    if(tab !== "sheet"){ setTab("sheet"); setTimeout(run, 120); }
-    else { setTimeout(run, 0); }
-  }, [tab]);
+    const gOverview = tcards([["接客数",totals.count],["成約◯",totals.dealO],["成約✕",totals.dealX],["成約率",(totals.rate===null?"−":totals.rate+"%")],["白黒済",totals.bwDone],["社員紹介済",totals.empDone]]);
+    const gMobile = tcards(MOBILE_ITEMS.map(function(m){ return [m.label, totals.mob[m.key]]; }).concat([["モバイル合計",totals.mobTotal]]));
+    const gBB = tcards(BB_OPTS.slice(1).map(function(o){ return [o, totals.bb[o]]; }));
+    const gDG = tcards([["でんき◯",totals.denkiO],["ガス◯",totals.gasO]]);
+    const gCard = tcards(CARD_ITEMS.map(function(ci){ return [ci.label, totals.card[ci.key]]; }).concat([["カード合計",totals.cardTotal]]));
+
+    const scoped = ''
+      + '#pp-cont{width:760px;background:#fff;padding:18px;font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",sans-serif;color:#1f2530;}'
+      + '#pp-cont *{box-sizing:border-box;margin:0;padding:0;}'
+      + '#pp-cont .head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px;}'
+      + '#pp-cont .h-title{font-size:20px;font-weight:700;}#pp-cont .h-sub{font-size:11px;color:#7a8494;margin-top:2px;}#pp-cont .h-date{font-size:16px;font-weight:700;}'
+      + '#pp-cont table{border-collapse:collapse;width:100%;}'
+      + '#pp-cont th,#pp-cont td{border:1px solid #c9ced8;padding:5px 7px;font-size:12px;vertical-align:middle;white-space:normal;text-align:left;}'
+      + '#pp-cont thead th{background:#2c3340;color:#fff;font-weight:600;white-space:nowrap;}'
+      + '#pp-cont .num{width:28px;text-align:center;color:#7a8494;background:#f1f4f8;}'
+      + '#pp-cont .ce{text-align:center;white-space:nowrap;}#pp-cont .nw{white-space:nowrap;}'
+      + '#pp-cont .sec{font-size:12px;font-weight:700;color:#2c3340;border-left:3px solid #2f6db5;padding-left:7px;margin:14px 0 7px;}'
+      + '#pp-cont .cards{display:flex;flex-wrap:wrap;gap:7px;}'
+      + '#pp-cont .tc{border:1px solid #c9ced8;border-radius:8px;padding:6px 12px;min-width:80px;text-align:center;}'
+      + '#pp-cont .tk{font-size:10px;color:#7a8494;}#pp-cont .tv{font-size:18px;font-weight:700;}';
+
+    const inner = '<style>' + scoped + '</style>'
+      + '<div class="head"><div><div class="h-title">接客日報</div><div class="h-sub">キャッチ → クローズ → 成約の記録シート</div></div><div class="h-date">' + dateText + '</div></div>'
+      + '<table><thead><tr><th></th><th>時間</th><th>キャッチ</th><th>クローズ</th><th>成約</th><th>白黒</th><th>社員紹介</th><th>利用中</th><th>成約内容</th></tr></thead><tbody>' + rowsHtml + '</tbody></table>'
+      + '<div class="sec">概況</div><div class="cards">' + gOverview + '</div>'
+      + '<div class="sec">モバイル</div><div class="cards">' + gMobile + '</div>'
+      + '<div class="sec">BB</div><div class="cards">' + gBB + '</div>'
+      + '<div class="sec">でんき・ガス</div><div class="cards">' + gDG + '</div>'
+      + '<div class="sec">PayPayカード</div><div class="cards">' + gCard + '</div>';
+
+    const cont = document.createElement("div");
+    cont.id = "pp-cont";
+    cont.style.position = "absolute";
+    cont.style.left = "-99999px";
+    cont.style.top = "0";
+    cont.innerHTML = inner;
+    document.body.appendChild(cont);
+
+    const finish = function(){ if(cont.parentNode){ cont.parentNode.removeChild(cont); } setPdfBusy(false); };
+
+    if(typeof html2canvas === "undefined" || !window.jspdf){
+      finish();
+      window.alert("PDF用の部品を読み込めませんでした。通信環境を確認して再度お試しください。");
+      return;
+    }
+    setPdfBusy(true);
+    html2canvas(cont, { scale: 2, backgroundColor: "#ffffff" }).then(function(canvas){
+      const img = canvas.toDataURL("image/jpeg", 0.92);
+      const jsPDF = window.jspdf.jsPDF;
+      const pdf = new jsPDF({ orientation: "p", unit: "mm", format: "a4" });
+      const pw = pdf.internal.pageSize.getWidth();
+      const ph = pdf.internal.pageSize.getHeight();
+      const margin = 8;
+      const availW = pw - margin*2, availH = ph - margin*2;
+      let iw = availW, ih = (canvas.height / canvas.width) * iw;
+      if(ih > availH){ ih = availH; iw = (canvas.width / canvas.height) * ih; }
+      const x = (pw - iw) / 2, y = margin;
+      pdf.addImage(img, "JPEG", x, y, iw, ih);
+      const fname = "接客日報_" + dateStr + ".pdf";
+      const blob = pdf.output("blob");
+      finish();
+      const file = new File([blob], fname, { type: "application/pdf" });
+      if(navigator.canShare && navigator.canShare({ files: [file] })){
+        navigator.share({ files: [file], title: fname }).catch(function(){ /* キャンセル時は何もしない */ });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = fname;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
+      }
+    }).catch(function(e){
+      finish();
+      window.alert("PDF生成に失敗しました：" + (e && e.message ? e.message : e));
+    });
+  }, [records, totals, ymd, dateStr]);
 
   const register = useCallback(function(){
     const f = form;
@@ -413,12 +489,36 @@ function App(){
     for(let i=0;i<CARD_ITEMS.length;i++){ const k=CARD_ITEMS[i].key; const n=Number(f.card[k])||0; card[k]=n; ct+=n; }
     const has = f.katch||f.katchName||f.close||f.deal||f.bw||f.emp||f.useMobile||f.useLine||mt||f.bb||f.denki||f.gas||ct;
     if(!has){ window.alert("内容を入力してください。"); return; }
+    if(editingId){
+      const upd = { id:editingId, time:f.time?f.time:nowHM(), katch:f.katch, katchName:f.katchName,
+        close:f.close, deal:f.deal, bw:f.bw, emp:f.emp, useMobile:f.useMobile, useLine:f.useLine,
+        mobile:mob, bb:f.bb, denki:f.denki, gas:f.gas, card:card };
+      setRecords(function(prev){ return prev.map(function(r){ return r.id===editingId ? upd : r; }); });
+      setEditingId(null);
+      resetForm();
+      return;
+    }
     const rec = { id:newId(), time:f.time?f.time:nowHM(), katch:f.katch, katchName:f.katchName,
       close:f.close, deal:f.deal, bw:f.bw, emp:f.emp, useMobile:f.useMobile, useLine:f.useLine,
       mobile:mob, bb:f.bb, denki:f.denki, gas:f.gas, card:card };
     setRecords(function(prev){ return prev.concat([rec]); });
     resetForm();
-  }, [form, resetForm]);
+  }, [form, resetForm, editingId]);
+
+  const startEdit = useCallback(function(id){
+    let rec = null;
+    for(let i=0;i<records.length;i++){ if(records[i].id === id){ rec = records[i]; break; } }
+    if(!rec){ return; }
+    setForm({ time:rec.time||"", katch:rec.katch||"", katchName:rec.katchName||"", close:rec.close||"",
+      deal:rec.deal||"", bw:rec.bw||"", emp:rec.emp||"", useMobile:rec.useMobile||"", useLine:rec.useLine||"",
+      mobile:Object.assign(emptyMobile(), rec.mobile||{}), bb:rec.bb||"", denki:rec.denki||"", gas:rec.gas||"",
+      card:Object.assign(emptyCard(), rec.card||{}) });
+    setEditingId(id);
+    setTab("entry");
+    if(window.scrollTo){ window.scrollTo(0, 0); }
+  }, [records]);
+
+  const cancelEdit = useCallback(function(){ setEditingId(null); resetForm(); }, [resetForm]);
 
   const deleteRecord = useCallback(function(id){
     setRecords(function(prev){ return prev.filter(function(r){ return r.id !== id; }); });
@@ -518,7 +618,7 @@ function App(){
 
       {tab==="entry" ? (
         <div className="card-box">
-          <h2>新規入力</h2>
+          <h2>{editingId ? "編集中（内容を直して更新）" : "新規入力"}</h2>
           <div className="fgrid">
             <div className="f-field">
               <label>時間</label>
@@ -605,8 +705,10 @@ function App(){
           </div>
 
           <div className="entry-actions">
-            <button type="button" className="btn primary" onClick={register}>登録</button>
-            <button type="button" className="btn" onClick={resetForm}>クリア</button>
+            <button type="button" className="btn primary" onClick={register}>{editingId ? "更新" : "登録"}</button>
+            {editingId
+              ? <button type="button" className="btn" onClick={cancelEdit}>編集をやめる</button>
+              : <button type="button" className="btn" onClick={resetForm}>クリア</button>}
           </div>
 
           <div className="recent">
@@ -625,7 +727,10 @@ function App(){
                           {r.deal ? <b style={{marginLeft:"6px",color:r.deal==="◯"?"#1f8a4c":"#c1392b"}}>{r.deal}</b> : null}
                           <span className="det">{s || "成約内容なし"}</span>
                         </span>
-                        <button className="x-btn" onClick={function(){ deleteRecord(r.id); }}>削除</button>
+                        <span className="ritem-ops">
+                          <button className="e-btn" onClick={function(){ startEdit(r.id); }}>編集</button>
+                          <button className="x-btn" onClick={function(){ deleteRecord(r.id); }}>削除</button>
+                        </span>
                       </div>
                     );
                   })}
@@ -636,7 +741,7 @@ function App(){
         <div className="sheet-view">
           <div className="toolbar">
             <button className="btn" onClick={pullCloud}>再読込</button>
-            <button className="btn primary" onClick={printOnePage}>印刷（1枚PDF）</button>
+            <button className="btn primary" onClick={makePdf} disabled={pdfBusy}>{pdfBusy ? "PDF作成中…" : "PDF保存・共有"}</button>
             <button className="btn" onClick={exportCsv}>CSV出力</button>
             <button className="btn danger" onClick={clearDay}>この日を消去</button>
           </div>
@@ -726,7 +831,10 @@ function App(){
                                 return <React.Fragment key={idx}>{idx>0?"、":""}<span className="ci">{p}</span></React.Fragment>;
                               })}
                             </td>
-                            <td className="c-op"><button className="x-btn" onClick={function(){ deleteRecord(r.id); }}>削除</button></td>
+                            <td className="c-op">
+                              <button className="e-btn" onClick={function(){ startEdit(r.id); }}>編集</button>
+                              <button className="x-btn" onClick={function(){ deleteRecord(r.id); }}>削除</button>
+                            </td>
                           </tr>
                         );
                       })}
