@@ -416,11 +416,11 @@ function App(){
     const gCard = tcards(CARD_ITEMS.map(function(ci){ return [ci.label, totals.card[ci.key]]; }).concat([["カード合計",totals.cardTotal]]));
 
     const scoped = ''
-      + '#pp-cont{width:760px;background:#fff;padding:18px;font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",sans-serif;color:#1f2530;}'
+      + '#pp-cont{width:660px;background:#fff;padding:18px;font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",sans-serif;color:#1f2530;}'
       + '#pp-cont *{box-sizing:border-box;margin:0;padding:0;}'
       + '#pp-cont .head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px;}'
       + '#pp-cont .h-title{font-size:20px;font-weight:700;}#pp-cont .h-sub{font-size:11px;color:#7a8494;margin-top:2px;}#pp-cont .h-date{font-size:16px;font-weight:700;}'
-      + '#pp-cont table{border-collapse:collapse;width:100%;}'
+      + '#pp-cont table{border-collapse:collapse;width:100%;table-layout:fixed;}'
       + '#pp-cont th,#pp-cont td{border:1px solid #c9ced8;padding:5px 7px;font-size:12px;vertical-align:middle;white-space:normal;text-align:left;word-break:break-word;overflow-wrap:anywhere;}'
       + '#pp-cont thead th{background:#2c3340;color:#fff;font-weight:600;white-space:nowrap;}'
       + '#pp-cont .num{width:28px;text-align:center;color:#7a8494;background:#f1f4f8;}'
@@ -433,7 +433,7 @@ function App(){
 
     const inner = '<style>' + scoped + '</style>'
       + '<div class="head"><div><div class="h-title">接客日報</div><div class="h-sub">キャッチ → クローズ → 成約の記録シート</div></div><div class="h-date">' + dateText + '</div></div>'
-      + '<table><thead><tr><th style="width:28px"></th><th style="width:52px">時間</th><th style="width:128px">キャッチ</th><th style="width:66px">クローズ</th><th style="width:46px">成約</th><th style="width:46px">白黒</th><th style="width:66px">社員紹介</th><th style="width:132px">利用中</th><th style="width:160px">成約内容</th></tr></thead><tbody>' + rowsHtml + '</tbody></table>'
+      + '<table><thead><tr><th style="width:24px"></th><th style="width:44px">時間</th><th style="width:100px">キャッチ</th><th style="width:50px">クローズ</th><th style="width:40px">成約</th><th style="width:40px">白黒</th><th style="width:66px">社員紹介</th><th style="width:110px">利用中</th><th style="width:150px">成約内容</th></tr></thead><tbody>' + rowsHtml + '</tbody></table>'
       + '<div class="sec">概況</div><div class="cards">' + gOverview + '</div>'
       + '<div class="sec">モバイル</div><div class="cards">' + gMobile + '</div>'
       + '<div class="sec">BB</div><div class="cards">' + gBB + '</div>'
