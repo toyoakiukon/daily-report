@@ -131,6 +131,7 @@
   .c-content{min-width:200px;}
   .c-content .ci,.c-use .ci{white-space:nowrap;}
   .emp-name{background:#ffd9e6;border-radius:4px;padding:1px 5px;font-weight:700;}
+  td.emp-cell{background:#ffdce8 !important;}
   .c-use{white-space:normal;}
   .c-op{text-align:center;white-space:nowrap;}
 
@@ -384,7 +385,7 @@ function App(){
     }
     records.forEach(function(r, i){
       let katchHtml = "";
-      if(r.katch === "社員"){ katchHtml = "社員" + (r.katchName ? ' <span class="emp">' + esc(r.katchName) + '</span>' : ""); }
+      if(r.katch === "社員"){ katchHtml = "社員" + (r.katchName ? " " + esc(r.katchName) : ""); }
       else if(r.katch){ katchHtml = esc(r.katch) + (r.katchName ? "<br>" + esc(r.katchName) : ""); }
       else { katchHtml = r.katchName ? esc(r.katchName) : ""; }
       const useArr = [];
@@ -395,7 +396,7 @@ function App(){
       rowsHtml += '<tr>'
         + '<td class="num">' + (i+1) + '</td>'
         + '<td class="ce">' + esc(r.time) + '</td>'
-        + '<td>' + katchHtml + '</td>'
+        + (r.katch === "社員" ? '<td class="emp-cell">' : '<td>') + katchHtml + '</td>'
         + '<td>' + esc(r.close) + '</td>'
         + '<td class="ce" style="color:' + dc + ';font-weight:700">' + esc(r.deal) + '</td>'
         + '<td class="ce">' + esc(r.bw) + '</td>'
@@ -424,7 +425,7 @@ function App(){
       + '#pp-cont thead th{background:#2c3340;color:#fff;font-weight:600;white-space:nowrap;}'
       + '#pp-cont .num{width:28px;text-align:center;color:#7a8494;background:#f1f4f8;}'
       + '#pp-cont .ce{text-align:center;white-space:nowrap;}#pp-cont .nw{white-space:nowrap;}'
-      + '#pp-cont .emp{background:#ffd9e6;border-radius:3px;padding:1px 4px;font-weight:700;}'
+      + '#pp-cont .emp-cell{background:#ffdce8;}'
       + '#pp-cont .sec{font-size:12px;font-weight:700;color:#2c3340;border-left:3px solid #2f6db5;padding-left:7px;margin:14px 0 7px;}'
       + '#pp-cont .cards{display:flex;flex-wrap:wrap;gap:7px;}'
       + '#pp-cont .tc{border:1px solid #c9ced8;border-radius:8px;padding:6px 12px;min-width:80px;text-align:center;}'
@@ -813,14 +814,11 @@ function App(){
                     ? <tr><td className="empty" colSpan="10">まだ登録がありません。「入力フォーム」タブから登録してください。</td></tr>
                     : records.map(function(r, i){
                         const name = (r.katch||"") + (r.katchName? " "+r.katchName : "");
-                        const katchCell = r.katch === "社員"
-                          ? (<span>社員{r.katchName ? <span> <span className="emp-name">{r.katchName}</span></span> : null}</span>)
-                          : name;
                         return (
                           <tr key={r.id}>
                             <td className="rownum">{i+1}</td>
                             <td className="c-time">{r.time}</td>
-                            <td>{katchCell}</td>
+                            <td className={r.katch === "社員" ? "emp-cell" : null}>{name}</td>
                             <td>{r.close}</td>
                             <td className="c-deal-cell"><span className={dealCls(r.deal)}>{r.deal}</span></td>
                             <td className="c-sel">
