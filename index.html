@@ -130,6 +130,7 @@
   .deal-ok{color:var(--ok);} .deal-ng{color:var(--ng);} .done{color:var(--done);font-weight:700;text-align:center;}
   .c-content{min-width:200px;}
   .c-content .ci,.c-use .ci{white-space:nowrap;}
+  .emp-name{background:#ffd9e6;border-radius:4px;padding:1px 5px;font-weight:700;}
   .c-use{white-space:normal;}
   .c-op{text-align:center;white-space:nowrap;}
 
@@ -382,7 +383,10 @@ function App(){
       rowsHtml = '<tr><td colspan="9" style="text-align:center;color:#7a8494;padding:14px">登録がありません</td></tr>';
     }
     records.forEach(function(r, i){
-      const name = (r.katch||"") + (r.katchName ? " " + r.katchName : "");
+      let katchHtml = "";
+      if(r.katch === "社員"){ katchHtml = "社員" + (r.katchName ? ' <span class="emp">' + esc(r.katchName) + '</span>' : ""); }
+      else if(r.katch){ katchHtml = esc(r.katch) + (r.katchName ? "<br>" + esc(r.katchName) : ""); }
+      else { katchHtml = r.katchName ? esc(r.katchName) : ""; }
       const useArr = [];
       if(r.useMobile){ useArr.push('<span class="nw">' + esc(r.useMobile) + '</span>'); }
       if(r.useLine){ useArr.push('<span class="nw">' + esc(r.useLine) + '</span>'); }
@@ -391,7 +395,7 @@ function App(){
       rowsHtml += '<tr>'
         + '<td class="num">' + (i+1) + '</td>'
         + '<td class="ce">' + esc(r.time) + '</td>'
-        + '<td>' + esc(name) + '</td>'
+        + '<td>' + katchHtml + '</td>'
         + '<td>' + esc(r.close) + '</td>'
         + '<td class="ce" style="color:' + dc + ';font-weight:700">' + esc(r.deal) + '</td>'
         + '<td class="ce">' + esc(r.bw) + '</td>'
@@ -411,7 +415,7 @@ function App(){
     const gCard = tcards(CARD_ITEMS.map(function(ci){ return [ci.label, totals.card[ci.key]]; }).concat([["カード合計",totals.cardTotal]]));
 
     const scoped = ''
-      + '#pp-cont{width:760px;background:#fff;padding:18px;font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",sans-serif;color:#1f2530;}'
+      + '#pp-cont{width:632px;background:#fff;padding:18px;font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",sans-serif;color:#1f2530;}'
       + '#pp-cont *{box-sizing:border-box;margin:0;padding:0;}'
       + '#pp-cont .head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px;}'
       + '#pp-cont .h-title{font-size:20px;font-weight:700;}#pp-cont .h-sub{font-size:11px;color:#7a8494;margin-top:2px;}#pp-cont .h-date{font-size:16px;font-weight:700;}'
@@ -420,6 +424,7 @@ function App(){
       + '#pp-cont thead th{background:#2c3340;color:#fff;font-weight:600;white-space:nowrap;}'
       + '#pp-cont .num{width:28px;text-align:center;color:#7a8494;background:#f1f4f8;}'
       + '#pp-cont .ce{text-align:center;white-space:nowrap;}#pp-cont .nw{white-space:nowrap;}'
+      + '#pp-cont .emp{background:#ffd9e6;border-radius:3px;padding:1px 4px;font-weight:700;}'
       + '#pp-cont .sec{font-size:12px;font-weight:700;color:#2c3340;border-left:3px solid #2f6db5;padding-left:7px;margin:14px 0 7px;}'
       + '#pp-cont .cards{display:flex;flex-wrap:wrap;gap:7px;}'
       + '#pp-cont .tc{border:1px solid #c9ced8;border-radius:8px;padding:6px 12px;min-width:80px;text-align:center;}'
@@ -427,7 +432,7 @@ function App(){
 
     const inner = '<style>' + scoped + '</style>'
       + '<div class="head"><div><div class="h-title">接客日報</div><div class="h-sub">キャッチ → クローズ → 成約の記録シート</div></div><div class="h-date">' + dateText + '</div></div>'
-      + '<table><colgroup><col style="width:26px"><col style="width:42px"><col style="width:110px"><col style="width:46px"><col style="width:36px"><col style="width:36px"><col style="width:52px"><col style="width:116px"><col></colgroup><thead><tr><th></th><th>時間</th><th>キャッチ</th><th>クローズ</th><th>成約</th><th>白黒</th><th>社員紹介</th><th>利用中</th><th>成約内容</th></tr></thead><tbody>' + rowsHtml + '</tbody></table>'
+      + '<table><colgroup><col style="width:24px"><col style="width:40px"><col style="width:100px"><col style="width:46px"><col style="width:34px"><col style="width:34px"><col style="width:50px"><col style="width:108px"><col style="width:160px"></colgroup><thead><tr><th></th><th>時間</th><th>キャッチ</th><th>クローズ</th><th>成約</th><th>白黒</th><th>社員紹介</th><th>利用中</th><th>成約内容</th></tr></thead><tbody>' + rowsHtml + '</tbody></table>'
       + '<div class="sec">概況</div><div class="cards">' + gOverview + '</div>'
       + '<div class="sec">モバイル</div><div class="cards">' + gMobile + '</div>'
       + '<div class="sec">BB</div><div class="cards">' + gBB + '</div>'
@@ -808,11 +813,14 @@ function App(){
                     ? <tr><td className="empty" colSpan="10">まだ登録がありません。「入力フォーム」タブから登録してください。</td></tr>
                     : records.map(function(r, i){
                         const name = (r.katch||"") + (r.katchName? " "+r.katchName : "");
+                        const katchCell = r.katch === "社員"
+                          ? (<span>社員{r.katchName ? <span> <span className="emp-name">{r.katchName}</span></span> : null}</span>)
+                          : name;
                         return (
                           <tr key={r.id}>
                             <td className="rownum">{i+1}</td>
                             <td className="c-time">{r.time}</td>
-                            <td>{name}</td>
+                            <td>{katchCell}</td>
                             <td>{r.close}</td>
                             <td className="c-deal-cell"><span className={dealCls(r.deal)}>{r.deal}</span></td>
                             <td className="c-sel">
